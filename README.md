@@ -32,17 +32,17 @@ kkjson::parser p;
 kkjson::parse_status ps = p.exec_parse("[ null , false , true , 123 , \"abc\", {\"123\": 111} ]");
 if (ps == parse_status::OK)
 {
-    ps.result.get_type();   // return value_type::VT_ARRAY
-    ps.result[0].get_type(); // return value_type::VT_NULL
-    ps.result[1].get_type(); // return value_type::VT_FALSE
-    ps.result[2].get_type(); // return value_type::VT_TRUE
-    ps.result[3].get_type(); // return value_type::VT_NUMBER
-    ps.result[3].get_number(); // return 123
-    ps.result[4].get_type(); // return value_type::VT_STRING
-    ps.result[4].get_number(); // return std::string("abc")
-    ps.result[5].get_type(); // return value_type::VT_OBJECT
-    ps.result[5].get_value("123").get_type(); // return value_type::VT_NUMBER
-    ps.result[5].get_value("123").get_number(); // return 111
+    p.result.get_type();   // return value_type::VT_ARRAY
+    p.result[0].get_type(); // return value_type::VT_NULL
+    p.result[1].get_type(); // return value_type::VT_FALSE
+    p.result[2].get_type(); // return value_type::VT_TRUE
+    p.result[3].get_type(); // return value_type::VT_NUMBER
+    p.result[3].get_number(); // return 123
+    p.result[4].get_type(); // return value_type::VT_STRING
+    p.result[4].get_number(); // return std::string("abc")
+    p.result[5].get_type(); // return value_type::VT_OBJECT
+    p.result[5].get_value("123").get_type(); // return value_type::VT_NUMBER
+    p.result[5].get_value("123").get_number(); // return 111
 }
 ...
 
