@@ -1,11 +1,7 @@
-#include <iostream>
-#include <string>
 #include <cstdlib>
 #include <cerrno>
 #include <cmath>
 #include "kkjson.h"
-
-#define PROBE(x) std::cout << (x) << std::endl
 
 // mix stack
 #define MIX_STACK_INIT_CAP 256
@@ -43,7 +39,240 @@ static bool hex4_to_ui(const char *iter, unsigned &ux)
 
 namespace kkjson
 {
-    // char_stack
+    using std::move, std::forward;
+
+    Value::Value() : type(ValueType::None) {}
+
+    Value::Value(const Value &another) : type(ValueType::None) { operator=(another); }
+
+    Value::Value(Value &&another) noexcept : type(ValueType::None)  { operator=(forward<Value>(another)); }
+
+    Value::~Value() { clear(); }
+
+    Value &Value::operator=(const Value &another)
+    {
+        clear();
+        switch (another.type)
+        {
+        case ValueType::Object:
+            pobject = new object_ctn(*(another.pobject));
+            break;
+        case ValueType::String:
+            pstring = new string_ctn(*(another.pstring));
+            break;
+        case ValueType::Array:
+            parray = new array_ctn(*(another.parray));
+            break;
+        case ValueType::Number:
+            number = another.number;
+        case ValueType::None:
+        case ValueType::Null:
+        case ValueType::True:
+        case ValueType::False:
+        default:
+            break;
+        }
+        type = another.type;
+        return *this;
+    }
+
+    Value &Value::operator=(Value &&another) noexcept
+    {
+        clear();
+        switch (another.type)
+        {
+        case ValueType::Object:
+            pobject = another.pobject;
+            another.pobject = nullptr;
+            break;
+        case ValueType::Array:
+            parray = another.parray;
+            another.parray = nullptr;
+            break;
+        case ValueType::String:
+            pstring = another.pstring;
+            another.pstring = nullptr;
+            break;
+        case ValueType::Number:
+            number = another.number;
+        case ValueType::None:
+        case ValueType::Null:
+        case ValueType::True:
+        case ValueType::False:
+        default:
+            break;
+        }
+        type = another.type;
+        return *this;
+    }
+
+    ValueType Value::get_type() const { return type; }
+
+    size_t Value::get_size() const
+    {
+        switch (type)
+        {
+        case ValueType::Object:
+            return pobject->size();
+        case ValueType::String:
+            return pstring->size();
+        case ValueType::Array:
+            return parray->size();
+        case ValueType::Number:
+        case ValueType::None:
+        case ValueType::Null:
+        case ValueType::True:
+        case ValueType::False:
+        default:
+            return size_t(0);
+        }
+    }
+
+    bool Value::is_none() const { return (type == ValueType::Object); }
+
+    bool Value::is_null() const { return (type == ValueType::Null); }
+
+    bool Value::is_bool() const { return (type == ValueType::True || type == ValueType::False); }
+
+    bool Value::is_number() const { return (type == ValueType::Number); }
+
+    bool Value::is_string() const { return (type == ValueType::String); }
+
+    bool Value::is_array() const { return (type == ValueType::Array); }
+
+    bool Value::is_object() const { return (type == ValueType::Object); }
+
+    bool Value::as_bool() const { return (type == ValueType::True); }
+
+    const Value::number_ctn &Value::as_number() const { return number; }
+
+    const Value::string_ctn &Value::as_string() const { return *pstring; }
+
+    Value &Value::operator[](const string_ctn &k)
+    {
+        auto iter = pobject->find(k);
+        if (iter == pobject->end())
+        {
+            iter = pobject->insert(pair_ctn(k, Value())).first;
+        }
+        return iter->second;
+    }
+
+    Value &Value::operator[](size_t idx)
+    {
+        return parray->operator[](idx);
+    }
+
+    void Value::set_literal(ValueType t)
+    {
+        clear();
+        type = t;
+    }
+
+    void Value::set_number(number_ctn n)
+    {
+        clear();
+        type = ValueType::Number;
+        number = n;
+    }
+
+    void Value::set_string(const string_ctn &another)
+    {
+        clear();
+        type = ValueType::String;
+        pstring = new string_ctn(another);
+    }
+
+    void Value::set_string(const char *p, size_t n)
+    {
+        clear();
+        type = ValueType::String;
+        pstring = new string_ctn(p, n);
+    }
+
+    void Value::init_array()
+    {
+        clear();
+        type = ValueType::Array;
+        parray = new array_ctn;
+    }
+
+    void Value::array_push_back(const Value &e)
+    {
+        if (type == ValueType::Array && parray != nullptr)
+        {
+            parray->push_back(e);
+        }
+    }
+
+    void Value::array_push_back(Value &&e)
+    {
+        if (type == ValueType::Array && parray != nullptr)
+        {
+            parray->push_back(forward<Value>(e));
+        }
+    }
+
+    void Value::init_object()
+    {
+        clear();
+        type = ValueType::Object;
+        pobject = new object_ctn;
+    }
+
+    void Value::object_insert(const string_ctn &k, const Value &v)
+    {
+        if (type == ValueType::Object && pobject != nullptr)
+        {
+            pobject->insert(pair_ctn(k, v));
+        }
+    }
+
+    void Value::object_insert(const string_ctn &k, Value &&v)
+    {
+        if (type == ValueType::Object && pobject != nullptr)
+        {
+            pobject->insert(pair_ctn(k, forward<Value>(v)));
+        }
+    }
+
+    void Value::clear()
+    {
+        switch (type)
+        {
+        case ValueType::Object:
+            if (pobject != nullptr)
+            {
+                delete pobject;
+                pobject = nullptr;
+            }
+            break;
+        case ValueType::Array:
+            if (parray != nullptr)
+            {
+                delete parray;
+                pobject = nullptr;
+            }
+            break;
+        case ValueType::String:
+            if (pstring != nullptr)
+            {
+                delete pstring;
+                pstring = nullptr;
+            }
+            break;
+        case ValueType::Number:
+            number = 0;
+        case ValueType::False:
+        case ValueType::True:
+        case ValueType::Null:
+        case ValueType::None:
+        default:
+            break;
+        }
+        type = ValueType::None;
+    }
+
     char_stack::char_stack()
     {
         top = 0;
@@ -90,304 +319,86 @@ namespace kkjson
         top = n;
     }
 
-    // value_entry
-    value_entry::value_entry() : type(value_type::VT_NONE) {}
+    __parser::__parser(const char *cstr) : raw_iter(cstr) {}
 
-    value_entry::value_entry(const value_entry &another)
+    ParseStatus __parser::exec(Value &out)
     {
-        operator=(another);
-    }
-
-    value_entry &value_entry::operator=(const value_entry &another)
-    {
-        clean();
-        switch (another.type)
-        {
-        case value_type::VT_OBJECT:
-            object = new std::map<std::string, value_entry *>();
-            for (auto it = another.object->begin(); it != another.object->end(); it++)
-            {
-                value_entry *pve = new value_entry(*(it->second));
-                object->insert(std::pair<std::string, value_entry *>(it->first, pve));
-            }
-            break;
-        case value_type::VT_STRING:
-            pstr = new std::string(*(another.pstr));
-            break;
-        case value_type::VT_ARRAY:
-            array = new std::vector<value_entry *>();
-            array->reserve(another.array->size());
-            for (auto it = another.array->begin(); it != another.array->end(); it++)
-                array->push_back(new value_entry(**it));
-            break;
-        case value_type::VT_NUMBER:
-            number = another.number;
-        case value_type::VT_NONE:
-        case value_type::VT_NULL:
-        case value_type::VT_TRUE:
-        case value_type::VT_FALSE:
-        default:
-            break;
-        }
-        type = another.type;
-        return *this;
-    }
-
-    value_entry::value_entry(value_entry &&another) noexcept
-    {
-        operator=(another);
-    }
-
-    value_entry &value_entry::operator=(value_entry &&another) noexcept
-    {
-        clean();
-        switch (another.type)
-        {
-        case value_type::VT_OBJECT:
-            object = another.object;
-            object = nullptr;
-            break;
-        case value_type::VT_ARRAY:
-            array = another.array;
-            another.array = nullptr;
-            break;
-        case value_type::VT_STRING:
-            pstr = another.pstr;
-            another.pstr = nullptr;
-            break;
-        case value_type::VT_NUMBER:
-            number = another.number;
-        case value_type::VT_NONE:
-        case value_type::VT_NULL:
-        case value_type::VT_TRUE:
-        case value_type::VT_FALSE:
-            break;
-        default:
-            break;
-        }
-        type = another.type;
-        return *this;
-    }
-
-    value_entry::~value_entry()
-    {
-        clean();
-    }
-
-    void value_entry::set_literal(value_type vt)
-    {
-        clean();
-        type = vt;
-    }
-
-    const value_type &value_entry::get_type() const
-    {
-        return type;
-    }
-
-    void value_entry::set_number(double value)
-    {
-        clean();
-        type = value_type::VT_NUMBER;
-        number = value;
-    }
-
-    const double &value_entry::get_number() const
-    {
-        return number;
-    }
-
-    void value_entry::set_string(const char *ori, size_t len)
-    {
-        clean();
-        type = value_type::VT_STRING;
-        pstr = new std::string(ori, len);
-    }
-
-    const std::string &value_entry::get_string() const
-    {
-        return *pstr;
-    }
-
-    // array
-    void value_entry::init_array()
-    {
-        clean();
-        type = value_type::VT_ARRAY;
-        array = new std::vector<value_entry *>();
-    }
-
-    void value_entry::add_array_element(value_entry *const &pve)
-    {
-        if (type != value_type::VT_ARRAY)
-            return;
-        array->push_back(pve);
-    }
-
-    size_t value_entry::get_array_size() const
-    {
-        return array != nullptr ? array->size() : 0;
-    }
-
-    const value_entry &value_entry::get_array_element(size_t idx) const
-    {
-        return *(array->operator[](idx));
-    }
-
-    const value_entry &value_entry::operator[](size_t idx) const
-    {
-        return *(array->operator[](idx));
-    }
-
-    // object
-    void value_entry::init_object()
-    {
-        clean();
-        type = value_type::VT_OBJECT;
-        object = new std::map<std::string, value_entry *>();
-    }
-
-    void value_entry::add_key_value(const std::string &key, value_entry *const &pve)
-    {
-        object->insert(std::pair<std::string, value_entry *>(std::string(key), pve));
-    }
-
-    const value_entry &value_entry::get_value(const std::string &key) const
-    {
-        using kv_iter_t = std::map<std::string, value_entry *>::iterator;
-        kv_iter_t iter = object->find(key);
-        return *(iter->second);
-    }
-
-    void value_entry::clean()
-    {
-        switch (type)
-        {
-        case value_type::VT_OBJECT:
-            if (object == nullptr)
-                break;
-            for (auto it = object->begin(); it != object->end(); it++)
-                delete it->second;
-            delete object;
-            break;
-        case value_type::VT_ARRAY:
-            if (array == nullptr)
-                break;
-            for (auto it = array->begin(); it != array->end(); it++)
-                delete *it;
-            delete array;
-            break;
-        case value_type::VT_STRING:
-            if (pstr != nullptr)
-            {
-                delete pstr;
-                pstr = nullptr;
-            }
-            break;
-        case value_type::VT_NUMBER:
-            number = 0;
-        case value_type::VT_FALSE:
-        case value_type::VT_TRUE:
-        case value_type::VT_NULL:
-        case value_type::VT_NONE:
-        default:
-            break;
-        }
-        type = value_type::VT_NONE;
-    }
-
-    // parser
-    parser::parser()
-    {
-        result = value_entry();
-    }
-
-    parse_status parser::exec_parse(const char *c_ptr)
-    {
-        raw_iter = c_ptr;
-        parse_status ret;
+        ParseStatus ret;
         parse_whitespace();
-        if ((ret = parse_value(result)) == parse_status::OK)
+        if ((ret = parse_value(out)) == ParseStatus::OK)
         {
             parse_whitespace();
             if (!IS_ZEROEND(*raw_iter))
             {
-                ret = parse_status::ROOT_NOT_SINGULAR;
+                ret = ParseStatus::ROOT_NOT_SINGULAR;
             }
         }
         return ret;
     }
 
-    parse_status parser::parse_whitespace()
+    ParseStatus __parser::parse_whitespace()
     {
         while (IS_WHITESPACE(*raw_iter))
             raw_iter++;
-        return parse_status::OK;
+        return ParseStatus::OK;
     }
 
-    parse_status parser::parse_literal(value_entry &ve, const char *target, value_type vt)
+    ParseStatus __parser::parse_value(Value &out)
+    {
+        ParseStatus status;
+        switch (*raw_iter)
+        {
+        case 't':
+            status = parse_literal(out, "true", ValueType::True);
+            break;
+        case 'f':
+            status = parse_literal(out, "false", ValueType::False);
+            break;
+        case 'n':
+            status = parse_literal(out, "null", ValueType::Null);
+            break;
+        case '"':
+            status = parse_string(out);
+            break;
+        case '[':
+            status = parse_array(out);
+            break;
+        case '{':
+            status = parse_object(out);
+            break;
+        case '\0':
+            status = ParseStatus::UNEXPECTED_SYMBOL;
+            break;
+        default:
+            status = parse_number(out);
+            break;
+        }
+        return status;
+    }
+
+    ParseStatus __parser::parse_literal(Value &out, const char *target, ValueType t)
     {
         size_t idx;
         for (idx = 0; target[idx]; idx++)
         {
             if (raw_iter[idx] != target[idx])
-                return parse_status::INVALID_VALUE;
+                return ParseStatus::INVALID_VALUE;
         }
         raw_iter += idx;
-        ve.set_literal(vt);
-        return parse_status::OK;
+        out.set_literal(t);
+        return ParseStatus::OK;
     }
 
-    parse_status parser::parse_number(value_entry &ve)
+    ParseStatus __parser::parse_string(Value &out)
     {
-        const char *iter = raw_iter;
-        char *endp = nullptr;
-        if (*iter == '-')
-            iter++;
-
-        if (*iter == '0')
-            iter++;
-        else
-        {
-            if (!IS_DIGIT19(*iter))
-                return parse_status::INVALID_VALUE;
-            do
-                iter++;
-            while (IS_DIGIT09(*iter));
-        }
-
-        if (*iter == '.')
-        {
-            iter++;
-            if (!IS_DIGIT09(*iter))
-                return parse_status::INVALID_VALUE;
-            do
-                iter++;
-            while (IS_DIGIT09(*iter));
-        }
-
-        if (*iter == 'e' || *iter == 'E')
-        {
-            iter++;
-            if (*iter == '+' || *iter == '-')
-                iter++;
-            if (!IS_DIGIT09(*iter))
-                return parse_status::INVALID_VALUE;
-            do
-                iter++;
-            while (IS_DIGIT09(*iter));
-        }
-        errno = 0;
-        ve.set_number(std::strtod(raw_iter, &endp));
-        if (endp != iter)
-            return parse_status::INVALID_VALUE;
-        if (errno == ERANGE && (ve.get_number() == HUGE_VAL || ve.get_number() == -HUGE_VAL))
-            return parse_status::NUMBER_TOO_LARGE;
-        raw_iter = iter;
-        return parse_status::OK;
+        size_t length;
+        ParseStatus ret;
+        if ((ret = parse_string_raw(length)) == ParseStatus::OK)
+            out.set_string((char *)cstack.pop(length), length);
+        return ret;
     }
 
-    parse_status parser::parse_string_raw(size_t &length)
+    ParseStatus __parser::parse_string_raw(size_t &length_out)
     {
         size_t top_bak = cstack.get_top();
         raw_iter++;
@@ -400,9 +411,9 @@ namespace kkjson
             switch (cur)
             {
             case '"':
-                length = cstack.get_top() - top_bak;
+                length_out = cstack.get_top() - top_bak;
                 raw_iter = iter;
-                return parse_status::OK;
+                return ParseStatus::OK;
             case '\\':
                 switch (*iter++)
                 {
@@ -435,7 +446,7 @@ namespace kkjson
                     if (!hex4_to_ui(iter, uh))
                     {
                         cstack.set_top(top_bak);
-                        return parse_status::INVALID_UNICODE_HEX;
+                        return ParseStatus::INVALID_UNICODE_HEX;
                     }
                     iter += 4;
                     if (IS_SURROGATE_H(uh))
@@ -443,23 +454,23 @@ namespace kkjson
                         if (*iter++ != '\\')
                         {
                             cstack.set_top(top_bak);
-                            return parse_status::INVALID_UNICODE_SURROGATE;
+                            return ParseStatus::INVALID_UNICODE_SURROGATE;
                         }
                         if (*iter++ != 'u')
                         {
                             cstack.set_top(top_bak);
-                            return parse_status::INVALID_UNICODE_SURROGATE;
+                            return ParseStatus::INVALID_UNICODE_SURROGATE;
                         }
                         if (!(hex4_to_ui(iter, ul)))
                         {
                             cstack.set_top(top_bak);
-                            return parse_status::INVALID_UNICODE_HEX;
+                            return ParseStatus::INVALID_UNICODE_HEX;
                         }
                         iter += 4;
                         if (IS_SURROGATE_L(ul))
                         {
                             cstack.set_top(top_bak);
-                            return parse_status::INVALID_UNICODE_SURROGATE;
+                            return ParseStatus::INVALID_UNICODE_SURROGATE;
                         }
                         uh = CALC_CODEPOINT(uh, ul);
                     }
@@ -487,53 +498,42 @@ namespace kkjson
                     break;
                 default:
                     cstack.set_top(top_bak);
-                    return parse_status::INVALID_STRING_ESCAPE;
+                    return ParseStatus::INVALID_STRING_ESCAPE;
                 }
                 break;
             case '\0':
                 cstack.set_top(top_bak);
-                return parse_status::MISS_QUOTATION_MARK;
+                return ParseStatus::MISS_QUOTATION_MARK;
             default:
                 if ((unsigned char)cur < 0x20)
                 {
                     cstack.set_top(top_bak);
-                    return parse_status::INVALID_STRING_CHAR;
+                    return ParseStatus::INVALID_STRING_CHAR;
                 }
                 PUSH_CHAR(cstack, cur);
             }
         }
     }
 
-    parse_status parser::parse_string(value_entry &ve)
-    {
-        size_t length;
-        parse_status ret;
-        if ((ret = parse_string_raw(length)) == parse_status::OK)
-            ve.set_string((char *)cstack.pop(length), length);
-        return ret;
-    }
-
-    parse_status parser::parse_array(value_entry &ve)
+    ParseStatus __parser::parse_array(Value &out)
     {
         raw_iter++;
-        ve.init_array();
-        parse_status ret;
+        out.init_array();
+        ParseStatus ret;
         parse_whitespace();
         if (*raw_iter == ']')
         {
             raw_iter++;
-            return parse_status::OK;
+            return ParseStatus::OK;
         }
         while (true)
         {
-            value_entry *pve = new value_entry();
-            if ((ret = parse_value(*pve)) != parse_status::OK)
+            Value tmp;
+            if ((ret = parse_value(tmp)) != ParseStatus::OK)
             {
-                delete pve;
                 break;
             }
-            ve.add_array_element(pve);
-            pve = nullptr;
+            out.array_push_back(move(tmp));
             parse_whitespace();
             if (*raw_iter == ',')
             {
@@ -543,55 +543,53 @@ namespace kkjson
             else if (*raw_iter == ']')
             {
                 raw_iter++;
-                return parse_status::OK;
+                return ParseStatus::OK;
             }
             else
             {
-                ret = parse_status::MISS_ARRAY_SYMBOL;
+                ret = ParseStatus::MISS_ARRAY_SYMBOL;
                 break;
             }
         }
-        ve.set_literal(value_type::VT_NONE);
+        out.set_literal(ValueType::None);
         return ret;
     }
 
-    parse_status parser::parse_object(value_entry &ve)
+    ParseStatus __parser::parse_object(Value &out)
     {
         raw_iter++;
-        ve.init_object();
-        parse_status ret;
+        out.init_object();
+        ParseStatus ret;
         parse_whitespace();
         if (*raw_iter == '}')
         {
             raw_iter++;
-            return parse_status::OK;
+            return ParseStatus::OK;
         }
         while (true)
         {
             if (*raw_iter != '"')
             {
-                ret = parse_status::MISS_OBJECT_KEY;
+                ret = ParseStatus::MISS_OBJECT_KEY;
                 break;
             }
             size_t str_len;
-            if ((ret = parse_string_raw(str_len)) != parse_status::OK)
+            if ((ret = parse_string_raw(str_len)) != ParseStatus::OK)
                 break;
             parse_whitespace();
             if (*raw_iter != ':')
             {
-                ret = parse_status::MISS_OBJECT_SYMBOL;
+                ret = ParseStatus::MISS_OBJECT_SYMBOL;
                 break;
             }
             raw_iter++;
             parse_whitespace();
-            value_entry *pve = new value_entry();
-            if ((ret = parse_value(*pve)) != parse_status::OK)
+            Value tmp;
+            if ((ret = parse_value(tmp)) != ParseStatus::OK)
             {
-                delete pve;
                 break;
             }
-            ve.add_key_value(std::string((char *)cstack.pop(str_len), 0, str_len), pve);
-            pve = nullptr;
+            out.object_insert(std::string((char *)cstack.pop(str_len), 0, str_len), move(tmp));
             parse_whitespace();
             if (*raw_iter == ',')
             {
@@ -605,43 +603,67 @@ namespace kkjson
             }
             else
             {
-                ret = parse_status::MISS_OBJECT_SYMBOL;
+                ret = ParseStatus::MISS_OBJECT_SYMBOL;
                 break;
             }
         }
         return ret;
     }
 
-    parse_status parser::parse_value(value_entry &ve)
+    ParseStatus __parser::parse_number(Value &out)
     {
-        parse_status status;
-        switch (*raw_iter)
+        const char *iter = raw_iter;
+        char *endp = nullptr;
+        if (*iter == '-')
+            iter++;
+
+        if (*iter == '0')
+            iter++;
+        else
         {
-        case 't':
-            status = parse_literal(ve, "true", value_type::VT_TRUE);
-            break;
-        case 'f':
-            status = parse_literal(ve, "false", value_type::VT_FALSE);
-            break;
-        case 'n':
-            status = parse_literal(ve, "null", value_type::VT_NULL);
-            break;
-        case '"':
-            status = parse_string(ve);
-            break;
-        case '[':
-            status = parse_array(ve);
-            break;
-        case '{':
-            status = parse_object(ve);
-            break;
-        case '\0':
-            status = parse_status::UNEXPECTED_SYMBOL;
-            break;
-        default:
-            status = parse_number(ve);
-            break;
+            if (!IS_DIGIT19(*iter))
+                return ParseStatus::INVALID_VALUE;
+            do
+                iter++;
+            while (IS_DIGIT09(*iter));
         }
-        return status;
+
+        if (*iter == '.')
+        {
+            iter++;
+            if (!IS_DIGIT09(*iter))
+                return ParseStatus::INVALID_VALUE;
+            do
+                iter++;
+            while (IS_DIGIT09(*iter));
+        }
+
+        if (*iter == 'e' || *iter == 'E')
+        {
+            iter++;
+            if (*iter == '+' || *iter == '-')
+                iter++;
+            if (!IS_DIGIT09(*iter))
+                return ParseStatus::INVALID_VALUE;
+            do
+                iter++;
+            while (IS_DIGIT09(*iter));
+        }
+        errno = 0;
+        out.set_number(std::strtod(raw_iter, &endp));
+        if (endp != iter)
+            return ParseStatus::INVALID_VALUE;
+        if (errno == ERANGE && (out.as_number() == HUGE_VAL || out.as_number() == -HUGE_VAL))
+            return ParseStatus::NUMBER_TOO_LARGE;
+        raw_iter = iter;
+        return ParseStatus::OK;
+    }
+
+    std::pair<ParseStatus, json> parse(const char *str)
+    {
+        Value result;
+        __parser ps(str);
+        auto status = ps.exec(result);
+        return {status, move(result)};
     }
 }
