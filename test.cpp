@@ -84,8 +84,7 @@ std::ostream &operator<<(std::ostream &o, ValueType vt)
     {
         ENUM_OUTPUT_CASE_VTYPE(None);
         ENUM_OUTPUT_CASE_VTYPE(Null);
-        ENUM_OUTPUT_CASE_VTYPE(True);
-        ENUM_OUTPUT_CASE_VTYPE(False);
+        ENUM_OUTPUT_CASE_VTYPE(Bool);
         ENUM_OUTPUT_CASE_VTYPE(Number);
         ENUM_OUTPUT_CASE_VTYPE(String);
         ENUM_OUTPUT_CASE_VTYPE(Array);
@@ -121,6 +120,7 @@ std::ostream &operator<<(std::ostream &o, ValueType vt)
     } while (0)
 
 #define EXPECT_INT(expect, actual) EXPECT_BASE((expect) == (actual), expect, actual)
+#define EXPECT_BOOL(expect, actual) EXPECT_BASE((expect) == (actual), expect, actual)
 #define EXPECT_SIZE_T(expect, actual) EXPECT_BASE((expect) == (actual), expect, actual)
 #define EXPECT_DOUBLE(expect, actual) EXPECT_BASE((expect) == (actual), expect, actual)
 
@@ -142,6 +142,15 @@ std::ostream &operator<<(std::ostream &o, ValueType vt)
         auto [_ps, _j] = parse(_str);      \
         EXPECT_INT(ParseStatus::OK, _ps);  \
         EXPECT_INT(_vtype, _j.get_type()); \
+    } while (0)
+
+#define TEST_BOOL(_value, _str)                     \
+    do                                              \
+    {                                               \
+        auto [_ps, _j] = parse(_str);               \
+        EXPECT_INT(ParseStatus::OK, _ps);           \
+        EXPECT_INT(ValueType::Bool, _j.get_type()); \
+        EXPECT_BOOL(_value, _j.as_bool());          \
     } while (0)
 
 #define TEST_NUMBER(_value, _str)                     \
@@ -195,8 +204,8 @@ namespace
     void test_parse_literal()
     {
         TEST_LITERAL(ValueType::Null, "null");
-        TEST_LITERAL(ValueType::True, "true");
-        TEST_LITERAL(ValueType::False, "false");
+        TEST_BOOL(true, "true");
+        TEST_BOOL(false, "false");
     }
 
     void test_parse_number()
@@ -253,8 +262,8 @@ namespace
 
         TEST_ARRAY_STAT(5, "[ null , false , true , 123 , \"abc\" ]");
         EXPECT_INT(ValueType::Null, tmp[0].get_type());
-        EXPECT_INT(ValueType::False, tmp[1].get_type());
-        EXPECT_INT(ValueType::True, tmp[2].get_type());
+        EXPECT_INT(ValueType::Bool, tmp[1].get_type());
+        EXPECT_INT(ValueType::Bool, tmp[2].get_type());
         EXPECT_INT(ValueType::Number, tmp[3].get_type());
         EXPECT_DOUBLE(123, tmp[3].as_number());
         EXPECT_INT(ValueType::String, tmp[4].get_type());
@@ -290,8 +299,8 @@ namespace
             "\"o\" : { \"1\" : 1, \"2\" : 2, \"323\" : 123.31 }"
             " } ");
         EXPECT_INT(ValueType::Null, tmp["n"].get_type());
-        EXPECT_INT(ValueType::False, tmp["f"].get_type());
-        EXPECT_INT(ValueType::True, tmp["t"].get_type());
+        EXPECT_INT(ValueType::Bool, tmp["f"].get_type());
+        EXPECT_INT(ValueType::Bool, tmp["t"].get_type());
         EXPECT_INT(ValueType::Number, tmp["i"].get_type());
         EXPECT_DOUBLE(123, tmp["i"].as_number());
         EXPECT_INT(ValueType::String, tmp["s"].get_type());

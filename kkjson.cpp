@@ -3,8 +3,8 @@
 #include <cmath>
 #include "kkjson.h"
 
-// mix stack
-#define MIX_STACK_INIT_CAP 256
+// char stack
+#define CHAR_STACK_INIT_CAP 256
 #define EXTEND_SIZE(x) (x += x >> 1)
 #define PUSH_CHAR(stk, c) (*(char *)stk.push(1) = c)
 
@@ -41,11 +41,13 @@ namespace kkjson
 {
     using std::move, std::forward;
 
+    // value
+
     Value::Value() : type(ValueType::None) {}
 
     Value::Value(const Value &another) : type(ValueType::None) { operator=(another); }
 
-    Value::Value(Value &&another) noexcept : type(ValueType::None)  { operator=(forward<Value>(another)); }
+    Value::Value(Value &&another) noexcept : type(ValueType::None) { operator=(forward<Value>(another)); }
 
     Value::~Value() { clear(); }
 
@@ -55,20 +57,21 @@ namespace kkjson
         switch (another.type)
         {
         case ValueType::Object:
-            pobject = new object_ctn(*(another.pobject));
+            pobject = new object_type(*(another.pobject));
             break;
         case ValueType::String:
-            pstring = new string_ctn(*(another.pstring));
+            pstring = new string_type(*(another.pstring));
             break;
         case ValueType::Array:
-            parray = new array_ctn(*(another.parray));
+            parray = new array_type(*(another.parray));
             break;
         case ValueType::Number:
             number = another.number;
+            break;
+        case ValueType::Bool:
+            boolval = another.boolval;
         case ValueType::None:
         case ValueType::Null:
-        case ValueType::True:
-        case ValueType::False:
         default:
             break;
         }
@@ -95,10 +98,11 @@ namespace kkjson
             break;
         case ValueType::Number:
             number = another.number;
+            break;
+        case ValueType::Bool:
+            boolval = another.boolval;
         case ValueType::None:
         case ValueType::Null:
-        case ValueType::True:
-        case ValueType::False:
         default:
             break;
         }
@@ -119,10 +123,9 @@ namespace kkjson
         case ValueType::Array:
             return parray->size();
         case ValueType::Number:
+        case ValueType::Bool:
         case ValueType::None:
         case ValueType::Null:
-        case ValueType::True:
-        case ValueType::False:
         default:
             return size_t(0);
         }
@@ -132,7 +135,7 @@ namespace kkjson
 
     bool Value::is_null() const { return (type == ValueType::Null); }
 
-    bool Value::is_bool() const { return (type == ValueType::True || type == ValueType::False); }
+    bool Value::is_bool() const { return (type == ValueType::Bool); }
 
     bool Value::is_number() const { return (type == ValueType::Number); }
 
@@ -142,18 +145,18 @@ namespace kkjson
 
     bool Value::is_object() const { return (type == ValueType::Object); }
 
-    bool Value::as_bool() const { return (type == ValueType::True); }
+    Value::bool_type &Value::as_bool() { return boolval; }
 
-    const Value::number_ctn &Value::as_number() const { return number; }
+    Value::number_type &Value::as_number() { return number; }
 
-    const Value::string_ctn &Value::as_string() const { return *pstring; }
+    Value::string_type &Value::as_string() { return *pstring; }
 
-    Value &Value::operator[](const string_ctn &k)
+    Value &Value::operator[](const string_type &k)
     {
         auto iter = pobject->find(k);
         if (iter == pobject->end())
         {
-            iter = pobject->insert(pair_ctn(k, Value())).first;
+            iter = pobject->insert(pair_type(k, Value())).first;
         }
         return iter->second;
     }
@@ -163,38 +166,99 @@ namespace kkjson
         return parray->operator[](idx);
     }
 
+    Value &Value::operator=(bool_type v)
+    {
+        set_bool(v);
+        return *this;
+    }
+
+    Value &Value::operator=(number_type n)
+    {
+        set_number(n);
+        return *this;
+    }
+
+    Value &Value::operator=(const string_type &s)
+    {
+        set_string(s);
+        return *this;
+    }
+
+    Value &Value::operator=(const init_array_type &l)
+    {
+        set_array(l);
+        return *this;
+    }
+
+    Value &Value::operator=(const init_obj_type &l)
+    {
+        set_object(l);
+        return *this;
+    }
+
+    Value::Value(bool_type v) { set_bool(v); }
+
+    Value::Value(number_type n) { set_number(n); }
+
+    Value::Value(const string_type &s) { set_string(s); }
+
+    Value::Value(const init_array_type &l) { set_array(l); }
+
+    Value::Value(const init_obj_type &l) { set_object(l); }
+
     void Value::set_literal(ValueType t)
     {
         clear();
         type = t;
     }
 
-    void Value::set_number(number_ctn n)
+    void Value::set_bool(bool_type v)
+    {
+        clear();
+        type = ValueType::Bool;
+        boolval = v;
+    }
+
+    void Value::set_number(number_type n)
     {
         clear();
         type = ValueType::Number;
         number = n;
     }
 
-    void Value::set_string(const string_ctn &another)
+    void Value::set_string(const string_type &another)
     {
         clear();
         type = ValueType::String;
-        pstring = new string_ctn(another);
+        pstring = new string_type(another);
     }
 
     void Value::set_string(const char *p, size_t n)
     {
         clear();
         type = ValueType::String;
-        pstring = new string_ctn(p, n);
+        pstring = new string_type(p, n);
+    }
+
+    void Value::set_array(const init_array_type &list)
+    {
+        clear();
+        type = ValueType::Array;
+        parray = new array_type(list);
+    }
+
+    void Value::set_object(const init_obj_type &list)
+    {
+        clear();
+        type = ValueType::Object;
+        pobject = new object_type(list);
     }
 
     void Value::init_array()
     {
         clear();
         type = ValueType::Array;
-        parray = new array_ctn;
+        parray = new array_type;
     }
 
     void Value::array_push_back(const Value &e)
@@ -217,22 +281,22 @@ namespace kkjson
     {
         clear();
         type = ValueType::Object;
-        pobject = new object_ctn;
+        pobject = new object_type;
     }
 
-    void Value::object_insert(const string_ctn &k, const Value &v)
+    void Value::object_insert(const string_type &k, const Value &v)
     {
         if (type == ValueType::Object && pobject != nullptr)
         {
-            pobject->insert(pair_ctn(k, v));
+            pobject->insert(pair_type(k, v));
         }
     }
 
-    void Value::object_insert(const string_ctn &k, Value &&v)
+    void Value::object_insert(const string_type &k, Value &&v)
     {
         if (type == ValueType::Object && pobject != nullptr)
         {
-            pobject->insert(pair_ctn(k, forward<Value>(v)));
+            pobject->insert(pair_type(k, forward<Value>(v)));
         }
     }
 
@@ -263,8 +327,7 @@ namespace kkjson
             break;
         case ValueType::Number:
             number = 0;
-        case ValueType::False:
-        case ValueType::True:
+        case ValueType::Bool:
         case ValueType::Null:
         case ValueType::None:
         default:
@@ -273,11 +336,13 @@ namespace kkjson
         type = ValueType::None;
     }
 
+    // char stack
+
     char_stack::char_stack()
     {
         top = 0;
-        capability = MIX_STACK_INIT_CAP;
-        ptr = (char *)std::malloc(MIX_STACK_INIT_CAP);
+        capability = CHAR_STACK_INIT_CAP;
+        ptr = (char *)std::malloc(CHAR_STACK_INIT_CAP);
     }
 
     char_stack::~char_stack()
@@ -319,6 +384,8 @@ namespace kkjson
         top = n;
     }
 
+    // __parser
+
     __parser::__parser(const char *cstr) : raw_iter(cstr) {}
 
     ParseStatus __parser::exec(Value &out)
@@ -349,10 +416,10 @@ namespace kkjson
         switch (*raw_iter)
         {
         case 't':
-            status = parse_literal(out, "true", ValueType::True);
+            status = parse_bool(out, "true", true);
             break;
         case 'f':
-            status = parse_literal(out, "false", ValueType::False);
+            status = parse_bool(out, "false", false);
             break;
         case 'n':
             status = parse_literal(out, "null", ValueType::Null);
@@ -386,6 +453,19 @@ namespace kkjson
         }
         raw_iter += idx;
         out.set_literal(t);
+        return ParseStatus::OK;
+    }
+
+    ParseStatus __parser::parse_bool(Value &out, const char *target, bool v)
+    {
+        size_t idx;
+        for (idx = 0; target[idx]; idx++)
+        {
+            if (raw_iter[idx] != target[idx])
+                return ParseStatus::INVALID_VALUE;
+        }
+        raw_iter += idx;
+        out.set_bool(v);
         return ParseStatus::OK;
     }
 

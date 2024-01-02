@@ -22,8 +22,7 @@ namespace kkjson
     {
         None,
         Null,
-        True,
-        False,
+        Bool,
         Number,
         String,
         Array,
@@ -56,32 +55,37 @@ namespace kkjson
     {
     private:
         friend class __parser;
-        using number_ctn = double;
-        using string_ctn = std::string;
-        using array_ctn = std::vector<Value>;
-        using object_ctn = std::map<string_ctn, Value>;
-        using pair_ctn = std::pair<string_ctn, Value>;
+        using bool_type = bool;
+        using number_type = double;
+        using string_type = std::string;
+        using array_type = std::vector<Value>;
+        using object_type = std::map<string_type, Value>;
+        using pair_type = std::pair<string_type, Value>;
+        using init_array_type = std::initializer_list<Value>;
+        using init_obj_type = std::initializer_list<object_type::value_type>;
 
         ValueType type;
         union // anonymous
         {
-            number_ctn number;
-            string_ctn *pstring;
-            array_ctn *parray;
-            object_ctn *pobject;
+            bool_type boolval;
+            number_type number;
+            string_type *pstring;
+            array_type *parray;
+            object_type *pobject;
         };
 
     public:
         Value();
         Value(const Value &another);
         Value(Value &&another) noexcept;
-        ~Value();
         Value &operator=(const Value &another);
         Value &operator=(Value &&another) noexcept;
+        ~Value();
 
         // read
         ValueType get_type() const;
         size_t get_size() const;
+        // type judge
         bool is_none() const;
         bool is_null() const;
         bool is_bool() const;
@@ -89,25 +93,43 @@ namespace kkjson
         bool is_string() const;
         bool is_array() const;
         bool is_object() const;
-        bool as_bool() const;
-        const number_ctn &as_number() const;
-        const string_ctn &as_string() const;
+        // as type
+        bool_type &as_bool();
+        number_type &as_number();
+        string_type &as_string();
         // read & write
-        Value &operator[](const string_ctn &k);
+        Value &operator[](const string_type &k);
         Value &operator[](size_t idx);
+        Value &operator=(bool_type v);
+        Value &operator=(number_type n);
+        Value &operator=(const string_type &s);
+        Value &operator=(const init_array_type &l);
+        Value &operator=(const init_obj_type &l);
+        
+        Value(bool_type v);
+        Value(number_type n);
+        Value(const string_type &s);
+        Value(const init_array_type &l);
+        Value(const init_obj_type &l);
 
     private:
         // modify value
         void set_literal(ValueType t);
-        void set_number(number_ctn n);
-        void set_string(const string_ctn &another);
+        void set_bool(bool_type v);
+        void set_number(number_type n);
+        void set_string(const string_type &another);
         void set_string(const char *p, size_t n);
+        void set_array(const init_array_type &l);
+        void set_object(const init_obj_type &l);
+
         void init_array();
         void array_push_back(const Value &e);
         void array_push_back(Value &&e);
+
         void init_object();
-        void object_insert(const string_ctn &k, const Value &v);
-        void object_insert(const string_ctn &k, Value &&v);
+        void object_insert(const string_type &k, const Value &v);
+        void object_insert(const string_type &k, Value &&v);
+
         void clear();
     };
 
@@ -134,13 +156,14 @@ namespace kkjson
         const char *raw_iter;
 
         __parser(const char *cstr);
-        __parser(const __parser&) = delete;
+        __parser(const __parser &) = delete;
         ~__parser() = default;
 
         ParseStatus exec(Value &out);
         ParseStatus parse_whitespace();
         ParseStatus parse_value(Value &out);
         ParseStatus parse_literal(Value &out, const char *target, ValueType t);
+        ParseStatus parse_bool(Value &out, const char *target, bool v);
         ParseStatus parse_string(Value &out);
         ParseStatus parse_string_raw(size_t &length_out);
         ParseStatus parse_array(Value &out);
