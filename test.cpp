@@ -120,7 +120,7 @@ std::ostream &operator<<(std::ostream &o, ValueType vt)
     } while (0)
 
 #define EXPECT_INT(expect, actual) EXPECT_BASE((expect) == (actual), expect, actual)
-#define EXPECT_BOOL(expect, actual) EXPECT_BASE((expect) == (actual), expect, actual)
+#define EXPECT_BOOL(expect, actual) EXPECT_BASE((expect) == (actual), (expect), (actual))
 #define EXPECT_SIZE_T(expect, actual) EXPECT_BASE((expect) == (actual), expect, actual)
 #define EXPECT_DOUBLE(expect, actual) EXPECT_BASE((expect) == (actual), expect, actual)
 
@@ -445,9 +445,52 @@ namespace
         TEST_ERROR(ParseStatus::MISS_OBJECT_SYMBOL, "{\"a\":1 \"b\"");
         TEST_ERROR(ParseStatus::MISS_OBJECT_SYMBOL, "{\"a\":{}");
     }
+
+    void test_array_iterator()
+    {
+        auto [st, js] = parse("[1, 2, 3, 4, 5]");
+        json::array_iterator ait = js.array_begin();
+        EXPECT_INT(ValueType::Number, (*ait).get_type());
+        EXPECT_INT(ValueType::Number, ait->get_type());
+        EXPECT_DOUBLE(1, ait->as_number());
+        EXPECT_DOUBLE(1, (ait++)->as_number());
+        EXPECT_DOUBLE(2, ait->as_number());
+        EXPECT_DOUBLE(3, (++ait)->as_number());
+        EXPECT_DOUBLE(2, (--ait)->as_number());
+        EXPECT_DOUBLE(2, (ait--)->as_number());
+        ait += 1;
+        EXPECT_DOUBLE(2, ait->as_number());
+        ait -= 1;
+        EXPECT_DOUBLE(1, ait->as_number());
+        EXPECT_INT(5, (js.array_end()) - ait);
+        EXPECT_INT(3, (js.array_end() - 1) - (ait + 1));
+        EXPECT_DOUBLE(2, ait[1].as_number());
+        EXPECT_BOOL(true, js.array_begin() == ait);
+        EXPECT_BOOL(false, js.array_end() == ait);
+        EXPECT_BOOL(true, js.array_begin() < js.array_end());
+        EXPECT_BOOL(false, js.array_begin() > js.array_end());
+        EXPECT_BOOL(false, js.array_begin() >= js.array_end());
+        EXPECT_BOOL(true, js.array_begin() <= js.array_begin());
+    }
+
+    void test_object_iterator()
+    {
+        auto [st, js] = parse("{\"a\":1, \"b\": 2 }");
+        json::object_iterator oit = js.object_begin();
+        EXPECT_INT(ValueType::Number, (*oit).second.get_type());
+        EXPECT_INT(ValueType::Number, oit->second.get_type());
+        EXPECT_DOUBLE(1, oit->second.as_number());
+        EXPECT_STRING("a", oit->first);
+        EXPECT_DOUBLE(1, (oit++)->second.as_number());
+        EXPECT_STRING("b", oit->first);
+        EXPECT_DOUBLE(2, oit->second.as_number());
+        EXPECT_DOUBLE(2, (oit--)->second.as_number());
+        EXPECT_DOUBLE(2, (++oit)->second.as_number());
+        EXPECT_DOUBLE(1, (--oit)->second.as_number());
+    }
 }
 
-int main(int argc, char const *argv[])
+int main()
 {
     output_keys();
     test_parse_literal();
@@ -473,6 +516,10 @@ int main(int argc, char const *argv[])
     // object
     test_error_miss_object_key();
     test_error_miss_object_symbol();
+
+    // iterator
+    test_array_iterator();
+    test_object_iterator();
     output_statistics_data();
     return exist_err ? 1 : 0;
 }

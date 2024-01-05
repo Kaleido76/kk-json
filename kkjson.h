@@ -10,10 +10,13 @@ namespace kkjson
 {
     enum class ValueType;
     enum class ParseStatus;
-    struct char_stack;
-    // new
     class Value;
+
+    struct __char_stack;
     class __parser;
+    class __array_iterator;  // random
+    class __object_iterator; // bidirect
+
     using json = Value;
 
     std::pair<ParseStatus, json> parse(const char *str);
@@ -67,12 +70,19 @@ namespace kkjson
         ValueType type;
         union // anonymous
         {
-            bool_type boolval;
-            number_type number;
+            bool_type bool_val;
+            number_type number_val;
             string_type *pstring;
             array_type *parray;
             object_type *pobject;
         };
+
+    public:
+        // iterator retated
+        friend class __array_iterator;
+        friend class __object_iterator;
+        using array_iterator = __array_iterator;
+        using object_iterator = __object_iterator;
 
     public:
         Value();
@@ -105,12 +115,17 @@ namespace kkjson
         Value &operator=(const string_type &s);
         Value &operator=(const init_array_type &l);
         Value &operator=(const init_obj_type &l);
-        
+
         Value(bool_type v);
         Value(number_type n);
         Value(const string_type &s);
         Value(const init_array_type &l);
         Value(const init_obj_type &l);
+
+        array_iterator array_begin();
+        array_iterator array_end();
+        object_iterator object_begin();
+        object_iterator object_end();
 
     private:
         // modify value
@@ -133,10 +148,83 @@ namespace kkjson
         void clear();
     };
 
-    struct char_stack
+    class __array_iterator
     {
-        char_stack();
-        ~char_stack();
+        friend class Value;
+        using inner_iter_type = Value::array_type::iterator; // random iterator
+        using self_type = __array_iterator;
+        using difference_type = inner_iter_type::difference_type;
+        using reference = inner_iter_type::reference;
+        using pointer = inner_iter_type::pointer;
+
+        inner_iter_type it;
+
+    public:
+        __array_iterator();
+        __array_iterator(const self_type &another);
+        __array_iterator(self_type &&another);
+        __array_iterator(const inner_iter_type &it);
+        __array_iterator(inner_iter_type &&it);
+        ~__array_iterator();
+
+        reference operator*() const;
+        pointer operator->() const;
+
+        difference_type operator-(const self_type &another) const;
+
+        self_type &operator++();
+        self_type operator++(int);
+        self_type &operator+=(difference_type n);
+        self_type operator+(difference_type n) const;
+        self_type &operator--();
+        self_type operator--(int);
+        self_type &operator-=(difference_type n);
+        self_type operator-(difference_type n) const;
+
+        reference operator[](difference_type n) const;
+        bool operator==(const self_type &another) const;
+        bool operator!=(const self_type &another) const;
+        bool operator<(const self_type &another) const;
+        bool operator>(const self_type &another) const;
+        bool operator<=(const self_type &another) const;
+        bool operator>=(const self_type &another) const;
+    };
+
+    class __object_iterator
+    {
+        friend class Value;
+        using inner_iter_type = Value::object_type::iterator; // bidirect iterator
+        using self_type = __object_iterator;
+        using reference = inner_iter_type::reference;
+        using pointer = inner_iter_type::pointer;
+
+        inner_iter_type it;
+
+    public:
+        __object_iterator();
+        __object_iterator(const self_type &another);
+        __object_iterator(self_type &&another);
+        __object_iterator(const inner_iter_type &it);
+        __object_iterator(inner_iter_type &&it);
+        ~__object_iterator();
+
+        reference operator*() const;
+        pointer operator->() const;
+
+        self_type &operator++();
+        self_type operator++(int);
+
+        self_type &operator--();
+        self_type operator--(int);
+
+        bool operator==(const self_type &another) const;
+        bool operator!=(const self_type &another) const;
+    };
+
+    struct __char_stack
+    {
+        __char_stack();
+        ~__char_stack();
 
         void *push(size_t size);
         void *pop(size_t size);
@@ -152,7 +240,7 @@ namespace kkjson
     {
         friend std::pair<ParseStatus, json> parse(const char *str);
 
-        char_stack cstack;
+        __char_stack cstack;
         const char *raw_iter;
 
         __parser(const char *cstr);

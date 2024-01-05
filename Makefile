@@ -1,5 +1,5 @@
 CC = g++
-CFLAGS = -c -Wall -std=c++17
+CFLAGS = -c -Wall -std=c++17 -Wextra -Wno-unknown-pragmas
 
 LIBNAME = libkkjson.a
 

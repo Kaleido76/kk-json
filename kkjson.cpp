@@ -3,6 +3,8 @@
 #include <cmath>
 #include "kkjson.h"
 
+#pragma region tools
+
 // char stack
 #define CHAR_STACK_INIT_CAP 256
 #define EXTEND_SIZE(x) (x += x >> 1)
@@ -37,11 +39,13 @@ static bool hex4_to_ui(const char *iter, unsigned &ux)
     return true;
 }
 
+#pragma endregion
+
 namespace kkjson
 {
     using std::move, std::forward;
 
-    // value
+#pragma region value related
 
     Value::Value() : type(ValueType::None) {}
 
@@ -66,10 +70,10 @@ namespace kkjson
             parray = new array_type(*(another.parray));
             break;
         case ValueType::Number:
-            number = another.number;
+            number_val = another.number_val;
             break;
         case ValueType::Bool:
-            boolval = another.boolval;
+            bool_val = another.bool_val;
         case ValueType::None:
         case ValueType::Null:
         default:
@@ -97,10 +101,10 @@ namespace kkjson
             another.pstring = nullptr;
             break;
         case ValueType::Number:
-            number = another.number;
+            number_val = another.number_val;
             break;
         case ValueType::Bool:
-            boolval = another.boolval;
+            bool_val = another.bool_val;
         case ValueType::None:
         case ValueType::Null:
         default:
@@ -145,9 +149,9 @@ namespace kkjson
 
     bool Value::is_object() const { return (type == ValueType::Object); }
 
-    Value::bool_type &Value::as_bool() { return boolval; }
+    Value::bool_type &Value::as_bool() { return bool_val; }
 
-    Value::number_type &Value::as_number() { return number; }
+    Value::number_type &Value::as_number() { return number_val; }
 
     Value::string_type &Value::as_string() { return *pstring; }
 
@@ -206,6 +210,11 @@ namespace kkjson
 
     Value::Value(const init_obj_type &l) { set_object(l); }
 
+    Value::array_iterator Value::array_begin() { return array_iterator(parray->begin()); }
+    Value::array_iterator Value::array_end() { return array_iterator(parray->end()); }
+    Value::object_iterator Value::object_begin() { return object_iterator(pobject->begin()); }
+    Value::object_iterator Value::object_end() { return object_iterator(pobject->end()); }
+
     void Value::set_literal(ValueType t)
     {
         clear();
@@ -216,14 +225,14 @@ namespace kkjson
     {
         clear();
         type = ValueType::Bool;
-        boolval = v;
+        bool_val = v;
     }
 
     void Value::set_number(number_type n)
     {
         clear();
         type = ValueType::Number;
-        number = n;
+        number_val = n;
     }
 
     void Value::set_string(const string_type &another)
@@ -326,7 +335,7 @@ namespace kkjson
             }
             break;
         case ValueType::Number:
-            number = 0;
+            number_val = 0;
         case ValueType::Bool:
         case ValueType::Null:
         case ValueType::None:
@@ -336,16 +345,132 @@ namespace kkjson
         type = ValueType::None;
     }
 
-    // char stack
+#pragma endregion
 
-    char_stack::char_stack()
+#pragma region iterator related
+
+    __array_iterator::__array_iterator() = default;
+    __array_iterator::__array_iterator(const self_type &another) : it(another.it) {}
+    __array_iterator::__array_iterator(self_type &&another) : it(move(another.it)) {}
+    __array_iterator::__array_iterator(const inner_iter_type &a_it) : it(a_it) {}
+    __array_iterator::__array_iterator(inner_iter_type &&a_it) : it(forward<inner_iter_type>(a_it)) {}
+    __array_iterator::~__array_iterator() = default;
+
+    __array_iterator::reference __array_iterator::operator*() const { return *it; }
+    __array_iterator::pointer __array_iterator::operator->() const { return it.operator->(); }
+    __array_iterator::difference_type __array_iterator::operator-(const self_type &another) const { return it - another.it; }
+
+    __array_iterator::self_type &__array_iterator::operator++()
+    {
+        ++it;
+        return *this;
+    }
+
+    __array_iterator::self_type __array_iterator::operator++(int)
+    {
+        self_type tmp(*this);
+        ++it;
+        return tmp;
+    }
+
+    __array_iterator::self_type &__array_iterator::operator+=(difference_type n)
+    {
+        it += n;
+        return *this;
+    }
+
+    __array_iterator::self_type __array_iterator::operator+(difference_type n) const
+    {
+        self_type tmp(*this);
+        tmp += n;
+        return tmp;
+    }
+
+    __array_iterator::self_type &__array_iterator::operator--()
+    {
+        --it;
+        return *this;
+    }
+    __array_iterator::self_type __array_iterator::operator--(int)
+    {
+        self_type tmp(*this);
+        --it;
+        return tmp;
+    }
+
+    __array_iterator::self_type &__array_iterator::operator-=(difference_type n)
+    {
+        it -= n;
+        return *this;
+    }
+
+    __array_iterator::self_type __array_iterator::operator-(difference_type n) const
+    {
+        self_type tmp(*this);
+        tmp -= n;
+        return tmp;
+    }
+
+    __array_iterator::reference __array_iterator::operator[](difference_type n) const { return it[n]; }
+    bool __array_iterator::operator==(const self_type &another) const { return it == another.it; }
+    bool __array_iterator::operator!=(const self_type &another) const { return it != another.it; }
+    bool __array_iterator::operator<(const self_type &another) const { return it < another.it; }
+    bool __array_iterator::operator>(const self_type &another) const { return it > another.it; }
+    bool __array_iterator::operator<=(const self_type &another) const { return it <= another.it; }
+    bool __array_iterator::operator>=(const self_type &another) const { return it >= another.it; }
+
+
+    __object_iterator::__object_iterator() = default;
+    __object_iterator::__object_iterator(const self_type &another) : it(another.it) {}
+    __object_iterator::__object_iterator(self_type &&another) : it(move(another.it)) {}
+    __object_iterator::__object_iterator(const inner_iter_type &a_it) : it(a_it) {}
+    __object_iterator::__object_iterator(inner_iter_type &&a_it) : it(forward<inner_iter_type>(a_it)) {}
+    __object_iterator::~__object_iterator() = default;
+
+    __object_iterator::reference __object_iterator::operator*() const { return *it; }
+    __object_iterator::pointer __object_iterator::operator->() const { return it.operator->(); }
+
+    __object_iterator::self_type &__object_iterator::operator++()
+    {
+        ++it;
+        return *this;
+    }
+
+    __object_iterator::self_type __object_iterator::operator++(int)
+    {
+        self_type tmp(*this);
+        ++it;
+        return tmp;
+    }
+
+    __object_iterator::self_type &__object_iterator::operator--()
+    {
+        --it;
+        return *this;
+    }
+
+    __object_iterator::self_type __object_iterator::operator--(int)
+    {
+        self_type tmp(*this);
+        --it;
+        return tmp;
+    }
+
+    bool __object_iterator::operator==(const self_type &another) const { return it == another.it; }
+    bool __object_iterator::operator!=(const self_type &another) const { return it != another.it; }
+
+#pragma endregion
+
+#pragma region char_stack
+
+    __char_stack::__char_stack()
     {
         top = 0;
         capability = CHAR_STACK_INIT_CAP;
         ptr = (char *)std::malloc(CHAR_STACK_INIT_CAP);
     }
 
-    char_stack::~char_stack()
+    __char_stack::~__char_stack()
     {
         std::free(ptr);
         ptr = nullptr;
@@ -353,7 +478,7 @@ namespace kkjson
         top = 0;
     }
 
-    void *char_stack::push(size_t size)
+    void *__char_stack::push(size_t size)
     {
         void *ret;
         if (top + size >= capability)
@@ -368,23 +493,25 @@ namespace kkjson
         return ret;
     }
 
-    void *char_stack::pop(size_t size)
+    void *__char_stack::pop(size_t size)
     {
         top -= size;
         return ptr + top;
     }
 
-    size_t char_stack::get_top()
+    size_t __char_stack::get_top()
     {
         return top;
     }
 
-    void char_stack::set_top(size_t n)
+    void __char_stack::set_top(size_t n)
     {
         top = n;
     }
 
-    // __parser
+#pragma endregion
+
+#pragma region __parser
 
     __parser::__parser(const char *cstr) : raw_iter(cstr) {}
 
@@ -746,4 +873,7 @@ namespace kkjson
         auto status = ps.exec(result);
         return {status, move(result)};
     }
+
+#pragma endregion
+
 }
